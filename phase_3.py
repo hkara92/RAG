@@ -45,3 +45,44 @@ def get_vectorstore():
 
 prompt = st.chat_input('Pass your prompt here')
 
+if prompt:
+    # Show user's message
+    st.chat_message('user').markdown(prompt)
+    # Save user's message
+    st.session_state.messages.append({'role':'user', 'content': prompt})
+    
+    # Prepare system prompt for the model
+    groq_sys_prompt = ChatPromptTemplate.from_template(
+        "You are very smart at everything, you always give the best, "
+        "the most accurate and most precise answers. Answer the following Question: {user_prompt}. "
+        "Start the answer directly. No small talk please"
+    )
+
+    model="llama3-8b-8192"
+    # Connect to the GROQ API
+    groq_chat = ChatGroq(
+        groq_api_key=os.environ.get("GROQ_API_KEY"), 
+        model_name=model
+    )
+
+    # Use the index to answer the question
+    try:
+        vectorstore = get_vectorstore()
+        if vectorstore is None:
+            st.error("Failed to load document")
+      
+        chain = RetrievalQA.from_chain_type(
+            llm=groq_chat,
+            chain_type='stuff',
+            retriever=vectorstore.as_retriever(search_kwargs={'k': 3}),
+            return_source_documents=True
+        )
+        result = chain({"query": prompt})
+        response = result["result"]  # Only keep the answer
+        # Old method: get_response_from_groq(prompt)
+        st.chat_message('assistant').markdown(response)
+        # Save assistant's reply
+        st.session_state.messages.append({'role':'assistant', 'content':response})
+    except Exception as e:
+        # Show error if something goes wrong
+        st.error(f"Error: {str(e)}")
